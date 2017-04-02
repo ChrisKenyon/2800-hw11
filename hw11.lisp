@@ -359,14 +359,20 @@ QED
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; swap-all-t: All x All x list x List -> List
 ;; (swap-all e f l acc) replaces all elements e
-;; in list f with element f. Acc is an accumulator
+;; in list l with element f. Acc is an accumulator
 (defunc swap-all-t (e f l acc)
-  .............
+  :input-contract (and (listp l)(listp acc))
+  :output-contract (listp (swap-all-t e f l acc))
+  (cond ((endp l) acc)
+        ((equal e (first l)) (swap-all-t e f (rest l) (append acc (list f))))
+        (t (swap-all-t e f (rest l) (append acc (list (first l)))))))
 
 ;; Write a function swap-all* that calls swap-all-t and has
 ;; the same input and output contracts as swap-all
-..............
-
+(defunc swap-all* (e f l)
+  :input-contract (listp l)
+  :output-contract (listp (swap-all* e f l))
+  (swap-all-t e f l '()))
 
 
 #|
