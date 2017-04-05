@@ -1016,8 +1016,7 @@ What does (fib-help (- n 1)) return?
 (check= (fib-fast 8) (fib 8))
 ;; Design more tests.
 (test? (implies (natp n) (equal (fib-fast n)(fib n))))
-(check= (fib-fast 20) (fib 20))#|ACL2s-ToDo-Line|#
-
+(check= (fib-fast 20) (fib 20))
 
 
 ;; Now let's see whether fib-fast deserves that name: 
@@ -1027,6 +1026,10 @@ What does (fib-help (- n 1)) return?
 ;; And on 200. And on 1000.
 ;;
 ;; What do you observe?
+#|
+Fib-fast returns values in less than a second for all values, while Fib takes ~12
+seconds to return a value for (fib 40)
+|#
 
 ; While the function isn't directly recursive, it's not taking advantage of memoization
 ; so it's not all that much faster at least on my machine. It's not working for high numbers
@@ -1047,8 +1050,7 @@ In the evaluation of (fib-fast 10), how many times is fib-help called on argumen
 Once
 
 Compare your results to those obtained with (fib n).
-..........
-
+Called 3 times for 5 and 34 times for 10
 
 |#
 (acl2::untrace$ fib-help)
@@ -1080,7 +1082,11 @@ how to update a and b in each recursive call.
 ;; If n_init is the initial value for n (and thus the index of the 
 ;; Fibonacci number we want to calculate), then i = (n_init - n).
 (defunc fib-t (n a b)
-  ...........
+  :input-contract (and (natp n) (natp a) (natp b))
+  :output-contract (natp (fib-t n a b))
+  (cond ((equal n 0) a)
+        ((equal n 1) b)
+        (t (fib-t (- n 1) b (+ a b)))))
 
 (check= (fib-t 1 0 1) 1)
 (check= (fib-t 2 0 1) 1)
@@ -1093,7 +1099,10 @@ how to update a and b in each recursive call.
 ;; Finally, write a non-recursive wrapper function fib* that has the same
 ;; signature as fib, and computes the same value as fib, but uses fib-t,
 ;; initializing the arguments a and b of fib-t appropriately:
-...........
+(defunc fib* (n)
+  :input-contract (natp n)
+  :output-contract (natp (fib* n))
+  (fib-t n 0 1))
 
 
 ;; Test that fib* computes the same values as fib above!
@@ -1101,22 +1110,27 @@ how to update a and b in each recursive call.
 (check= (fib* 1) (fib 1))
 (check= (fib* 6) (fib 6))
 ;; Design more tests.
-..............
-
+(check= (fib* 2) (fib 2))
+(check= (fib* 3) (fib 3))
+(check= (fib* 4) (fib 4))
 
 
 ;; Compare fib-fast and fib* ! Which one wins? It should be fib*, but you
 ;; need large arguments to see any difference! (Try n=5000 or more.)
 
 (acl2::er-progn
-   (acl2::time$ (acl2::value-triple (fib* .........)))
+   (acl2::time$ (acl2::value-triple (fib* 5500)))
    (acl2::value-triple nil))
 
 (acl2::er-progn
-   (acl2::time$ (acl2::value-triple (fib-fast .......)))
-   (acl2::value-triple nil))
+   (acl2::time$ (acl2::value-triple (fib-fast 5500)))
+   (acl2::value-triple nil))#|ACL2s-ToDo-Line|#
 
-.............
+
+#|
+(fib* 5500) returned in 0.01 seconds realtime, 0.00 seconds runtime
+(fib-fast 5500) returned in
+|#
 
 ;; Make sure you understand why fib* is more efficient than fib-fast.
 
@@ -1128,7 +1142,17 @@ Prove that fib* is equivalent to fib
 
 A) Start your proof.  You will need a lemma which you will write in part B).
 Feel free to use that lemma here to complete the proof.
-.............
+
+C1. (natp n)
+-----
+(fib* n)
+= {def. fib*}
+(fib-t n 0 1)
+= {L1|((a 0)(b 1))}
+(+ (* 0 (fib (- n 1)))(* (fib n) 1))
+= {arithmetic}
+(fib n)
+QED
 
 
 B) Devise a lemma L1 that relates fib-t and fib. The lemma should have the
@@ -1142,20 +1166,97 @@ fib-t.
 
 Hint: write the recursive calls to (fib-t 5 0 1) and see how it compares
 to outputs to (fib n).
-n=5: (fib-t 5 0 1) = 0 + (fib 5)*1
-n=4: (fib-t 4 1 1) = ........  
-n=3: (fib-t 3 .........
-n=2: (fib-t 2 .........
-n=1: (fib-t 1 .........
+n=5: (fib-t 5 0 1) = 0 + (fib 5) * 1
+n=4: (fib-t 4 1 1) = 1 + (fib 3) * 2 
+n=3: (fib-t 3 1 2) = 1 + (fib 3) * 2
+n=2: (fib-t 2 2 3) = 2 + (fib 2) * 3
+n=1: (fib-t 1 3 5) = 0 + (fib 1) * 5
+
 Do you see a pattern?  Make sure you include variables a and b in  your lemma.
 Notice that (fib-t 4 1 1) = (fib-t 5 0 1)? The fib-t always returns the same
 value, even when n decreases but (fib 4) does not equal (fib 5)
 
-.............
+L1: (natp n) /\ (natp a) /\ (natp b) /\ (> n 0) => (fib-t n a b) = (+ (* a (fib (- n 1))) (* (fib n) b))
 
 
 C) Prove lemma L1 by induction.
-...............
+
+Cases:
+1. ~IC => L1
+2. (natp n) /\ (natp a) /\ (natp b) /\ (equal n 0) => L1
+3. (natp n) /\ (natp a) /\ (natp b) /\ ~(equal n 0) /\ (equal n 1) => L1
+4. (natp n) /\ (natp a) /\ (natp b) /\ ~(equal n 0) /\ ~(equal n 1) /\ L1|((n (- n 1)) (a b) (b (+ a b))) => L1
+
+Proof for 1 is trivial, ~IC case
+
+Proof for 2:
+
+C1. (natp n)
+C2. (natp a)
+C3. (natp b)
+C4. (equal n 0)
+C5. (> n 0)
+---------------
+C6. nil {C4, C5, PL}
+QED
+
+Proof for 3:
+
+C1. (natp n)
+C2. (natp a)
+C3. (natp b)
+C4. ~(equal n 0)
+C5. (equal n 1)
+C6. (> n 0)
+
+(fib-t n a b)
+= {c5, def fib-t, if-axiom}
+b
+^ LHS of L1 equality
+v RHS of L1 equality
+(+ (* a (fib (- n 1))) (* (fib n) b))
+= {def. fib | ((n (- n 1))), C5}
+(+ (* a 0) (* (fib n) b))
+= {arithmetic}
+(* (fib n) b)
+= {arithmetic, def. fib, C5}
+b
+
+b=b
+= {PL}
+t
+QED
+
+Proof for 4:
+
+C1. (natp n)
+C2. (natp a)
+C3. (natp b)
+C4. ~(equal n 0)
+C5. ~(equal n 1)
+C6. (> n 0)
+C7. (natp (- n 1)) /\ (natp b) /\ (natp (+ a b)) /\ (> (- n 1) 0) => 
+     (fib-t (- n 1) b (+ a b)) = (+ (* b (fib (- (- n 1) 1))) (* (fib (- n 1)) (+ a b)))
+-------
+C8. (natp (- n 1)) {C1, C4, def natp}
+C9. (natp (+ a b)) {C2, C3, arithmetic, def addition}
+C10. (> (- n 1) 0) {C1, C4, C5, arithmetic}
+C11. (fib-t (- n 1) b (+ a b)) = (+ (* b (fib (- (- n 1) 1))) (* (fib (- n 1)) (+ a b))) {c3, c7, c8, c8, c9, c10, MP}
+
+(fib-t n a b)
+= {def fib-t, C4, C5}
+(fib-t (- n 1) b (+ a b))
+= {C11}
+(+ (* b (fib (- (- n 1) 1))) (* (fib (- n 1)) (+ a b)))
+= {arithmetic, distributivity (?) of addition}
+(+ (* b (fib (- n 2))) (+ (* (fib (- n 1)) a) (* (fib (- n 1)) b)))
+= {commutative and associative properties of addition}
+(+ (* (fib (- n 1)) a) (+ (* (fib (- n 1)) b) (* b (fib (- n 2)))))
+= {distributivity of addition}
+(+ (* a (fib (- n 1))) (* b (+ (fib (- n 1)) (fib (- n 2)))))
+= {def fib, commutive property of multiplication}
+(+ (*a (fib (- n 1))) (* (fib n) b))
+QED
 
 |#
 
