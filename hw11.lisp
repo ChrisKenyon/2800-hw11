@@ -987,8 +987,8 @@ What does (fib-help (- n 1)) return?
 (defunc fib-help (n)
   :input-contract (natp n)
   :output-contract (lonp (fib-help n))
-  (cond ((equal n 0) (cons 0 '()))
-        ((equal n 1) (cons 1 (fib-help 0)))
+  (cond ((equal n 0) '(0))
+        ((equal n 1) '(1 0))
         (t (let ((prev (fib-help (- n 1))))
              (cons (+ (first prev)(second prev))prev)))))
 
@@ -1016,8 +1016,7 @@ What does (fib-help (- n 1)) return?
 (check= (fib-fast 8) (fib 8))
 ;; Design more tests.
 (test? (implies (natp n) (equal (fib-fast n)(fib n))))
-(check= (fib-fast 20) (fib 20))#|ACL2s-ToDo-Line|#
-
+(check= (fib-fast 20) (fib 20))
 
 
 ;; Now let's see whether fib-fast deserves that name: 
@@ -1047,8 +1046,8 @@ In the evaluation of (fib-fast 10), how many times is fib-help called on argumen
 Once
 
 Compare your results to those obtained with (fib n).
-..........
 
+It certainly makes many less calls
 
 |#
 (acl2::untrace$ fib-help)
@@ -1080,7 +1079,11 @@ how to update a and b in each recursive call.
 ;; If n_init is the initial value for n (and thus the index of the 
 ;; Fibonacci number we want to calculate), then i = (n_init - n).
 (defunc fib-t (n a b)
-  ...........
+  :input-contract (and (natp n)(natp a)(natp b))
+  :output-contract (natp (fib-t n a b))
+  (cond ((equal n 0) 0)
+        ((equal n 1) b)
+        (t (fib-t (- n 1) b (+ a b)))))
 
 (check= (fib-t 1 0 1) 1)
 (check= (fib-t 2 0 1) 1)
@@ -1093,30 +1096,36 @@ how to update a and b in each recursive call.
 ;; Finally, write a non-recursive wrapper function fib* that has the same
 ;; signature as fib, and computes the same value as fib, but uses fib-t,
 ;; initializing the arguments a and b of fib-t appropriately:
-...........
 
+(defunc fib* (n)
+  :input-contract (natp n)
+  :output-contract (natp (fib* n))
+  (fib-t n 0 1))
 
 ;; Test that fib* computes the same values as fib above!
 
 (check= (fib* 1) (fib 1))
 (check= (fib* 6) (fib 6))
 ;; Design more tests.
-..............
-
+(test? (implies (natp n) (equal (fib n))(fib* n)))
+(check= (fib* 10) 55)
+(check= (fib* 1000) 43466557686937456435688527675040625802564660517371780402481729089536555417949051890403879840079255169295922593080322634775209689623239873322471161642996440906533187938298969649928516003704476137795166849228875)
 
 
 ;; Compare fib-fast and fib* ! Which one wins? It should be fib*, but you
 ;; need large arguments to see any difference! (Try n=5000 or more.)
 
 (acl2::er-progn
-   (acl2::time$ (acl2::value-triple (fib* .........)))
+   (acl2::time$ (acl2::value-triple (fib* 20)))
    (acl2::value-triple nil))
 
 (acl2::er-progn
-   (acl2::time$ (acl2::value-triple (fib-fast .......)))
-   (acl2::value-triple nil))
+   (acl2::time$ (acl2::value-triple (fib-fast 20)))
+   (acl2::value-triple nil))#|ACL2s-ToDo-Line|#
 
-.............
+
+; 0 seconds vs 15 seconds. My fib-fast implementation is bad but I'm out of time
+; fib* uses dynamic programming to minimize extra work
 
 ;; Make sure you understand why fib* is more efficient than fib-fast.
 
@@ -1128,8 +1137,15 @@ Prove that fib* is equivalent to fib
 
 A) Start your proof.  You will need a lemma which you will write in part B).
 Feel free to use that lemma here to complete the proof.
-.............
 
+C1. (natp n)
+(fib* n)
+= {def. fib*}
+(fib-t n 0 1)
+= {L1|((a 0)(b 1))}
+(+ (* 0 (fib (- n 1))) (* (fib n) 1))
+= {arith}
+(fib n)
 
 B) Devise a lemma L1 that relates fib-t and fib. The lemma should have the
 form
@@ -1151,11 +1167,84 @@ Do you see a pattern?  Make sure you include variables a and b in  your lemma.
 Notice that (fib-t 4 1 1) = (fib-t 5 0 1)? The fib-t always returns the same
 value, even when n decreases but (fib 4) does not equal (fib 5)
 
-.............
+
+(natp n)/\(natp a)/\(natp b)/\(> n 0)=>
+  (fib-t n a b) = (+  (* (fib n) b) (* a (fib (- n 1))))
 
 
 C) Prove lemma L1 by induction.
-...............
+
+1. ~ic => L1
+2. ic/\(equal n 0) => L1
+3. ic/\~(equal n 0)/\(equal n 1) => L1
+4. ic/\~(equal n 0)/\~(equal n 1)/\L1|((n (- n 1))(a b)(b (+ a b))) => L1
+
+1.
+C1. ~((natp n)/\(natp a)/\(natp b))
+C2. (natp n)
+C3. (natp a)
+C4. (natp b)
+---------------
+C5. nil {C1,C2,PL}
+={PL,C5}
+t
+
+2. 
+C1. (natp n)
+C2. (natp a)
+C3. (natp b)
+C4. (equal n 0)
+C5. (> n 0)
+---------------
+C6. nil {C4,C5,PL}
+={PL,C6}
+t
+
+3. 
+C1. (natp n)
+C2. (natp a)
+C3. (natp b)
+C4. ~(equal n 0)
+C5. (equal n 1)
+C6. (> n 0)
+(fib-t n a b) = (+ (* (fib n) b)(* a (fib (- n 1))))
+= {def. fib-t,C5}
+b = (+ (* (fib n) b)(* a (fib (- n 1))))
+= {def. fib,C5}
+b = (+ (* (fib n) b)(* a 0))
+= {arith}
+b = (* (fib n) b)
+= {arith,def. fib,C5}
+b = b
+= {PL}
+t
+
+4.
+C1. (natp n)
+C2. (natp a)
+C3. (natp b)
+C4. ~(equal n 0)
+C5. ~(equal n 1)
+C6. (> n 0)
+C7. (natp (- n 1))/\(natp b)/\(natp (+ a b))/\(> (- n 1) 0) => 
+       (fib-t (- n 1) b (+ a b)) = (+ (* (fib (- n 1)) (+ a b)) (* b (fib (- (- n 1) 1))))
+------------------------------------------------------------------------------------------------
+C8. (natp (- n 1)) {C1, C4}
+C9. (natp (+ a b)) {C2, C3, arith}
+C10. (> (- n 1) 0) {C1, C4, C5}
+C11. (fib-t (- n 1) b (+ a b)) = 
+       (+ (* (fib (- n 1)) (+ a b))(* b (fib (- (- n 1) 1)))) {C7,C8,C3,C9,C10,MP}
+
+(fib-t n a b)
+= {def. fib-t, C4, C5}
+(fib-t (- n 1) b (+ a b))
+= {C11}
+(+ (* (fib (- n 1)) (+ a b))(* b (fib (- (- n 1) 1))))
+= {arith(commute,assoc.,distrib. +)}
+(+ (* b (+ (fib (- n 1)) (fib (- n 2))))(* a (fib (- n 1))))
+= {def. fib, arith}
+(+ (* (fib n) b)(* a (fib (- n 1))))
+
 
 |#
 
