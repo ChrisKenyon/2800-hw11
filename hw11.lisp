@@ -363,9 +363,9 @@ QED
 (defunc swap-all-t (e f l acc)
   :input-contract (and (listp l)(listp acc))
   :output-contract (listp (swap-all-t e f l acc))
-  (cond ((endp l) acc)
-        ((equal e (first l)) (swap-all-t e f (rest l) (append acc (list f))))
-        (t (swap-all-t e f (rest l) (append acc (list (first l)))))))
+  (cond ((endp l) (rev* acc))
+        ((equal e (first l)) (swap-all-t e f (rest l) (cons f acc)))
+        (t (swap-all-t e f (rest l) (cons (first l) acc)))))
 
 ;; Write a function swap-all* that calls swap-all-t and has
 ;; the same input and output contracts as swap-all
@@ -382,21 +382,113 @@ Finally: Prove swap-all* = swap-all
 A) Write a conjecture (use contract checking and completion)
 that  accurately describes the equality we are trying to 
 show.
-   ............
 
+(listp l) => (swap-all e f l) = (swap-all* e f l)
 
 B) What is the lemma demonstrating the relationship between 
 swap-all-t, acc, and swap-all.
-   ............
 
+LemmaB
+(listp l) /\ (listp acc) => (swap-all-t (e f l acc)) = (append (rev acc) (swap-all e f l))
 
 C) Prove your conjecture from A using the lemma from B 
    (and assuming it's valid).
-   .................
 
+C1. (listp l)
+LHS
+(swap-all* e f l)
+= {def. swap-all}
+(swap-all-t e f l nil)
+= {LemmaB}
+(append (rev nil) (swap-all-t e f l))
+= {def. append, def. rev}
+(swap-all-t e f l)
+RHS
+   
 D) Prove the swap-all-t lemma from B) above.
- ...........
  
+1. ~ic => LemmaB
+2. (listp l) /\ (listp acc) /\ (endp l) => LemmaB
+3. (listp l) /\ (listp acc) /\ ~(endp l) /\ (equal e (first l)) /\ LemmaB((l (rest l))(acc (cons f acc))) => LemmaB
+4. (listp l) /\ (listp acc) /\ ~(endp l) /\ ~(equal e (first l)) /\ LemmaB((l (rest l))(acc (cons (first l) acc))) => LemmaB
+   
+1.
+C1. ~((listp l)/\(listp acc))
+C2. (listp l)
+C3. (listp acc)
+--------------------------
+C4. nil {C1,C2,C3}
+={PL,C4}
+t
+
+2.
+C1. (listp l)
+C2. (listp acc)
+C3. (endp l)
+(swap-all-t (e f l acc)) = (append (rev acc) (swap-all e f l))
+= {def swap-all-t, def. nil, def. swap-all, C3}
+(rev acc) = (append (rev acc) nil)
+= {def. append}
+(rev acc) = (rev acc)
+= {PL}
+t
+
+3
+C1. (listp l)
+C2. (listp acc)
+C3. ~(endp l)
+C4. (equal e (first l))
+C5. (listp (rest l))/\(listp (cons f acc)) => 
+           (swap-all-t (e f (rest l) (cons f acc)) = (append (rev (cons f acc)) (swap-all e f (rest l)))
+------------------------------
+C6. (listp (rest l)) {C1,C3,def. listp}
+C7. (listp (cons f acc)) {C2,cons ax,def. listp}
+C8. (swap-all-t (e f (rest l) (cons f acc)) = 
+         (append (rev (cons f acc)) (swap-all e f (rest l))) {C5,C6,C7,MP}
+
+LHS
+(swap-all-t (e f l acc))
+={def. swap-all-t,C3,C4}
+(swap-all-t e f (rest l)(cons f acc))
+= {C8}
+(append (rev (cons f acc))(swap-all e f (rest l)))
+= {def. rev}
+(append (append (rev acc)(list f))(swap-all e f (rest l)))
+= {communicativity of append}
+(append (rev acc) (append (list f)(swap-all e f (rest l))))
+= {C4,def swap-all} 
+(append (rev acc) (swap-all e f l)))
+RHS
+
+4.
+C1. (listp l)
+C2. (listp acc)
+C3. ~(endp l)
+C4. ~(equal e (first l))
+C5. (listp (rest l))/\(listp (cons (first l) acc)) =>
+      (swap-all-t (e f (rest l) (cons (first l) acc))) = (append (rev (cons (first l) acc)) (swap-all e f (rest l)))
+-------------------------------------------------
+C6. (listp (rest l)) {C1,C3}
+C7. (listp (cons f acc)) {C2,cons ax, def. listp}
+C8. (swap-all-t (e f (rest l) (cons (first l) acc)) =
+     (append (rev (cons (first l) acc)) (swap-all e f (rest l))) {C5,C6,C7,MP}
+
+LHS
+(swap-all-t (e f l acc))
+= {def. swap-all-t,C3,C4}
+(swap-all-t (e f (rest l) (cons (first l) acc)))
+= {C8}
+(append (rev (cons (first l) acc))(swap-all e f (rest l)))
+= {def. rev}
+(append (append (rev acc) (list (first l)))(swap-all e f (rest l)))
+= {communicativity of append}
+(append (rev acc) (append (list (first l))(swap-all (e f (rest l)))))
+= {def. swap-all}
+(append (rev acc)(swap-all e f l))
+RHS
+
+QED
+
 |#
 
 
@@ -417,15 +509,85 @@ Write functions pow-t and pow* (following the pattern
 we've established).  Make sure they are admissible and you provide
 appropriate tests.
 |#
-............
 
+(defunc pow-t (x p acc)
+  :input-contract (and (rationalp x)(natp p)(rationalp acc))
+  :output-contract (rationalp (pow-t x p acc))
+  (if (equal p 0) acc (pow-t x (- p 1) (* acc x))))
+
+(defunc pow* (x p)
+  :input-contract (and (rationalp x)(natp p))
+  :output-contract (rationalp (pow x p))
+  (pow-t x p 1))
 
 #|
 Now prove that pow* is equivalent to pow: 
 phi_pow: (rationalp x)/\(natp p) => ((pow* x p) = (pow x p))
 
-............
+LemmaPow
+(rationalp acc)/\(natp p)/\(rationalp acc) => (pow-t x p acc) = (* acc (pow x p))
 
+C1. (rationalp x)
+C2. (natp p)
+LHS
+(pow* x p)
+= {def. pow*}
+(pow-t x p 1)
+= {LemmaPow} 
+(* (pow x p) 1)
+= {arith}
+(pow x p)
+RHS
+
+Now need to prove LemmaPow to make this valid
+
+1. ~IC => LemmaPow
+2. IC/\(equal p 0) => LemmaPow
+3. IC/\ ~(equal p 0) /\ LemmaPow((p (p-1))(acc (acc*x))) => LemmaPow
+
+1.
+C1. ~((rationalp x)/\(natp p)/\(rationalp acc))
+C2. (rationalp x)
+C3. (natp p)
+C4. (rationalp acc)
+----------------------
+C5. nil {C1,C2,C3,C4,PL}
+={PL,C5}
+t
+
+2. 
+C1. (rationalp x)
+C2. (natp p)
+C3. (rationalp acc) 
+C4. (equal p 0)
+(pow-t x p acc) = (* acc (pow x 0))
+= {def. pow-t,def.pow,C4}
+acc = (* acc 1)
+= {arith}
+t
+
+3. 
+C1. (rationalp x)
+C2. (natp p)
+C3. (rationalp acc) 
+C4. ~(equal p 0)
+C5. (rationalp x)/\(natp (- p 1))/\(rationalp (* x acc)) => 
+      (pow-t x (- p 1) (*x acc) = (* (pow x (- p 1)) (* x acc)))
+----------------------------
+C6. (natp (- p 1)) {C4,C2}
+C7. (rationalp (* x acc)) {arith,def. rationalp,C1,C3}
+C8. (pow-t x (- p 1)(*x acc) = (* (pow x (- p 1) (* acc x)))
+LHS
+(pow-t x p acc)
+= {def. pow-t} 
+(pow-t x (- p 1)(* acc x)) 
+= {C8}
+(* (pow x (- p 1))(* acc x)))
+= {arith}
+(* acc (* x (pow x (- p 1))))
+= {def. pow}
+(* acc (pow x p))
+RHS
 
 |#
 
@@ -441,8 +603,13 @@ phi_pow: (rationalp x)/\(natp p) => ((pow* x p) = (pow x p))
 ;;   You should make both functions as efficient as possible (so don't call app on
 ;;   recursive calls).
 ;;   Notice you don't necessarily have to store the final answer in acc
-................
 
+(defunc insert-t (e l acc)
+  :input-contract (and (rationalp e)(lorp l)(lorp acc))
+  :output-contract (lorp (insert-t e l acc))
+  (cond ((endp l) (append (rev* acc)(list e)))
+        ((> (first l) e) (append (rev* acc)(cons e l)))
+        (t (insert-t e (rest l)(cons (first l) acc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; GIVEN
@@ -461,7 +628,96 @@ B) Prove that insert* is equivalent to insert (the lists do not have
 to be sorted):
     phi_insert_eq: (lorp l)/\(rationalp e) => ((insert* e l) = (insert e l))
     
-...............
+LemmaInsert    
+(lorp l)/\(rationalp e)/\(lorp acc) => 
+     (insert-t e l acc) = (append (rev* acc) (insert e l))
+
+
+C1. (lorp l)
+C2. (rationalp e)
+(insert* e l) = (insert e l)
+= {def. insert*}
+(insert-t e l nil) = (insert e l)
+={LemmaInsert}
+(append nil (insert e l)) = (insert e l)
+={def. append}
+(insert e l) = (insert e l)
+={PL}
+t
+
+Now must prove LemmaInsert
+
+1. ~ic => LemmaInsert
+2. ic/\(endp l) => LemmaInsert
+3. ic/\~(endp l)/\(> (first l) e) => LemmaInsert
+4. ic/\~(endp l)/\~(> (first l) e)/\
+     LemmaInsert((l (rest l))(acc (cons (first l) acc))) => LemmaInsert
+   
+1. 
+C1. ~((lorp l)/\(rationalp e)/\(lorp acc))
+C2. (rationalp e)
+C3. (lorp l)
+C4. (lorp acc)
+--------------
+C5. nil {C1,C2,C3,C4,PL}
+={PL,C5}
+t
+
+2.
+C1. (lorp l)
+C2. (rationalp e)
+C3. (lorp acc)
+C4. (endp l)
+(insert-t e l acc) = (append (rev acc) (insert e l))
+= {def. insert-t,C4} 
+(append (rev acc) (list e)) = (append (rev acc) (insert e nil))
+= {def. insert, def.cons, def.list,C4}
+(append (rev acc) (list e)) = (append (rev acc) (list e))
+={PL}
+t
+
+3. 
+C1. (lorp l)
+C2. (rationalp e)
+C3. (lorp acc)
+C4. ~(endp l)
+C5. (> (first l) e)
+(insert-t e l acc) = (append (rev acc)) (insert e l)
+= {def. insert-t, if axioms, C5} 
+(append (rev acc) (cons e l)) = (append (rev acc)) (insert e l)
+= {def. insert, C5, if axioms}
+(append (rev acc) (cons e l)) = (append (rev acc) (cons e l))
+{PL}
+t
+
+4.
+C1. (lorp l)
+C2. (rationalp e)
+C3. (lorp acc)
+C4. ~(endp l)
+C5. ~(> (first l) e)
+C6. (lorp (rest l))/\(rationalp e)/\(lorp (cons (first l) acc)) => 
+      (insert-t e (rest l)(cons (first l) acc)) = (append (cons (first l) acc)(insert e (rest l)))
+------------------------
+C7. (lorp (rest l)) {C1,C4}
+C8. (lorp (cons (first l) acc)) {C1,first-rest ax,C3}
+C9. (insert-t e (rest l)(cons (first l) acc)) = 
+      (append (cons (first l) acc)(insert e (rest l))) {C7,C2,C8,C6,MP}
+LHS
+(insert-t e l acc)
+= {def. insert-t,C4,C5}
+(insert-t e (rest l)(cons (first l) acc))
+= {C9}
+(append (rev (cons (first l) acc))(insert e (rest l)))
+= {def. rev}
+(append (append (rev acc) (first l)) (insert e (rest l)))
+= {associativity of append} 
+(append (rev acc)(append (first l)(insert e (rest l))))
+= {def. insert}
+(append (rev acc)(insert e l))
+RHS
+
+QED
 
 
 |#
@@ -475,7 +731,9 @@ phi_insert*: (rationalp e) /\ (lorp l) /\ (sortedp l)
 HINT: this question is worth only one point AND you won't need induction. No
 need for a formal proof.
 
-..............
+We know that this is a theorem because with the proof that insert* is equivalent
+to insert, phi_insert will also hold for insert*.
+This is to say that if A => C and A = B, then B => C.
 
 
 |#
@@ -529,14 +787,14 @@ need for a formal proof.
    (acl2::time$ (acl2::value-triple (insert 2000 *big-list*)))
    (acl2::value-triple nil))
 ;; How many seconds does this take?
-;; ..........................
+;; 0 seconds
 
 
 (acl2::er-progn
    (acl2::time$ (acl2::value-triple (insert* 2000 *big-list*)))
    (acl2::value-triple nil))
 ;; How many seconds does this take?
-;;..........................
+;; 2.57 seconds
 
 
 ;; Wait. What??  Briefly explain why you (presumably) didn't see a speed
@@ -545,8 +803,13 @@ need for a formal proof.
 ;; to see when accumulators help and when they don't.
 
 #|
- .........................
- <Insert your explanation here>
+
+These functions need to maintain a sorted list, so when they insert
+2000, it needs to go to its proper spot. insert* will need to iterate
+through each element of the list regardless of where it places the element,
+while insert can simply return the cons of the element and the rest of the
+list without needing to affect each element.
+
 
 |#
 
@@ -574,19 +837,20 @@ need for a formal proof.
    (acl2::time$ (acl2::value-triple (swap-all* 'foo 'bar *big-swap-list*)))
    (acl2::value-triple nil))
 ;; How many seconds does this take?
-..........................
+;; 0 seconds
 
 (acl2::er-progn
    (acl2::time$ (acl2::value-triple (swap-all 'foo 'bar *big-swap-list*)))
    (acl2::value-triple nil))
 ;; How many seconds does this take?
-..........................
+;; 0 seconds
 
 #|
 Now (temporarily) change the definition of *big-swap-list* 
 to have 50000 elements and run the speed tests again.
 What happened?
-................
+
+Stack Overflow!
 
 |#
 
@@ -671,12 +935,12 @@ and the result is 3. (The 3 is the result, not the argument to fib)
 
 In the evaluation of (fib  6), how many times is fib called on argument 2 ?
 (ie how many lines start with #> and end with FIB 2)
-........
 
+8 times
 
 In the evaluation of (fib 8), how many times is fib called on argument 2 ? 
-...........
 
+21 times
 
 Hint: you can use the Eclipse editor to count occurrences of certain text
 strings, or you can copy the output of trace into your favorite alternative
@@ -721,14 +985,19 @@ What does (fib-help (- n 1)) return?
 ;; and returns the list of Fibonacci numbers
 ;; from n to 0 (inclusive).
 (defunc fib-help (n)
-  .................
+  :input-contract (natp n)
+  :output-contract (lonp (fib-help n))
+  (cond ((equal n 0) (cons 0 '()))
+        ((equal n 1) (cons 1 (fib-help 0)))
+        (t (let ((prev (fib-help (- n 1))))
+             (cons (+ (first prev)(second prev))prev)))))
 
 (check= (fib-help 1) '(1 0))
 (check= (fib-help 2) '(1 1 0))
 (check= (fib-help 3) '(2 1 1 0))
-
 ;; Design more tests.
-..............
+(test? (implies (natp n) (equal (+ 1 n)(len (fib-help n)))))
+(check= (fib-help 10) '(55 34 21 13 8 5 3 2 1 1 0))
 
 
 ;; Now write a non-recursive function fib-fast, with 
@@ -736,16 +1005,19 @@ What does (fib-help (- n 1)) return?
 ;; which calls fib-help to compute the value.
 
 (defunc fib-fast (n)
-  .........
+  :input-contract (natp n)
+  :output-contract (natp (fib n))
+  (first (fib-help n)))
 
 ;; Test that fib-fast computes the same values as fib above!
 
 (check= (fib-fast 1) (fib 1))
 (check= (fib-fast 6) (fib 6))
 (check= (fib-fast 8) (fib 8))
-
 ;; Design more tests.
-.................
+(test? (implies (natp n) (equal (fib-fast n)(fib n))))
+(check= (fib-fast 20) (fib 20))#|ACL2s-ToDo-Line|#
+
 
 
 ;; Now let's see whether fib-fast deserves that name: 
@@ -755,8 +1027,9 @@ What does (fib-help (- n 1)) return?
 ;; And on 200. And on 1000.
 ;;
 ;; What do you observe?
-...................
 
+; While the function isn't directly recursive, it's not taking advantage of memoization
+; so it's not all that much faster at least on my machine. It's not working for high numbers
 
 ;; Let's find out what's going on. Turn on tracing for the helper function
 ;; (fib-fast itself is not recursive, so no tracing needed):
@@ -766,11 +1039,12 @@ What does (fib-help (- n 1)) return?
 #|
 
 In the evaluation of (fib-fast  5), how many times is fib-help called on argument 2 ?
-.............
+
+Once
 
 In the evaluation of (fib-fast 10), how many times is fib-help called on argument 2 ? 
-.............
 
+Once
 
 Compare your results to those obtained with (fib n).
 ..........
